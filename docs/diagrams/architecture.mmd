@@ -1,0 +1,55 @@
+graph TD
+    subgraph "digital.vasic.plugins"
+        subgraph "Core"
+            plugin["<b>pkg/plugin</b><br/>Plugin interface<br/>State, Metadata, Config<br/>StateTracker"]
+        end
+
+        subgraph "Lifecycle Management"
+            registry["<b>pkg/registry</b><br/>Registry<br/>Dependency ordering<br/>Version constraints"]
+        end
+
+        subgraph "Dynamic Loading"
+            loader["<b>pkg/loader</b><br/>Loader interface<br/>SharedObjectLoader<br/>ProcessLoader"]
+        end
+
+        subgraph "Isolation"
+            sandbox["<b>pkg/sandbox</b><br/>Sandbox interface<br/>ProcessSandbox<br/>InProcessSandbox"]
+        end
+
+        subgraph "Output Processing"
+            structured["<b>pkg/structured</b><br/>Parser interface<br/>Schema, Validator<br/>JSON/YAML/Markdown"]
+        end
+    end
+
+    registry -->|"imports"| plugin
+    loader -->|"imports"| plugin
+    sandbox -->|"imports"| plugin
+    structured -.->|"no dependency"| independent["stdlib + yaml.v3"]
+
+    subgraph "External Dependencies"
+        uuid["github.com/google/uuid"]
+        yamlv3["gopkg.in/yaml.v3"]
+        testify["github.com/stretchr/testify<br/>(test only)"]
+    end
+
+    sandbox -->|"uses"| uuid
+    structured -->|"uses"| yamlv3
+    plugin -.->|"test"| testify
+    registry -.->|"test"| testify
+    loader -.->|"test"| testify
+    sandbox -.->|"test"| testify
+    structured -.->|"test"| testify
+
+    classDef core fill:#4a90d9,stroke:#2c5f9e,color:#fff
+    classDef mgmt fill:#50b86c,stroke:#36824c,color:#fff
+    classDef load fill:#e8a838,stroke:#b07e28,color:#fff
+    classDef iso fill:#d94a68,stroke:#a33350,color:#fff
+    classDef out fill:#8e6fbf,stroke:#6a4f96,color:#fff
+    classDef ext fill:#888,stroke:#555,color:#fff
+
+    class plugin core
+    class registry mgmt
+    class loader load
+    class sandbox iso
+    class structured out
+    class uuid,yamlv3,testify,independent ext

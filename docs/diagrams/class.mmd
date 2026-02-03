@@ -1,0 +1,239 @@
+classDiagram
+    direction TB
+
+    %% === Package: plugin ===
+
+    class Plugin {
+        <<interface>>
+        +Name() string
+        +Version() string
+        +Init(ctx Context, config Config) error
+        +Start(ctx Context) error
+        +Stop(ctx Context) error
+        +HealthCheck(ctx Context) error
+    }
+
+    class State {
+        <<enum>>
+        Uninitialized
+        Initialized
+        Running
+        Stopped
+        Failed
+        +String() string
+    }
+
+    class Metadata {
+        +Name string
+        +Version string
+        +Description string
+        +Author string
+        +Dependencies []string
+        +Validate() error
+    }
+
+    class Config {
+        <<map~string, any~>>
+        +GetString(key, fallback string) string
+        +GetInt(key string, fallback int) int
+        +GetFloat64(key string, fallback float64) float64
+        +GetBool(key string, fallback bool) bool
+        +GetStringSlice(key string) []string
+        +Has(key string) bool
+    }
+
+    class StateTracker {
+        -mu RWMutex
+        -state State
+        +Get() State
+        +Set(s State)
+        +Transition(expected, next State) error
+    }
+
+    StateTracker --> State : tracks
+
+    %% === Package: registry ===
+
+    class Registry {
+        -mu RWMutex
+        -plugins map~string, Plugin~
+        -deps map~string, []string~
+        +Register(p Plugin) error
+        +Get(name string) Plugin, bool
+        +List() []string
+        +Remove(name string) error
+        +SetDependencies(name string, deps []string) error
+        +StartAll(ctx Context) error
+        +StopAll(ctx Context) error
+        -resolveOrder() []string, error
+    }
+
+    Registry o-- Plugin : manages 0..*
+
+    %% === Package: loader ===
+
+    class Loader {
+        <<interface>>
+        +Load(path string) Plugin, error
+        +LoadDir(dir string) []Plugin, error
+    }
+
+    class LoaderConfig {
+        +PluginDir string
+        +AllowedPatterns []string
+        +AutoRegister bool
+    }
+
+    class SharedObjectLoader {
+        -config *LoaderConfig
+        -mu Mutex
+        +Load(path string) Plugin, error
+        +LoadDir(dir string) []Plugin, error
+        -validatePath(path string) error
+        -matchesPattern(name string) bool
+    }
+
+    class ProcessLoader {
+        -config *LoaderConfig
+        -processes map~string, managedProcess~
+        -mu Mutex
+        +Load(path string) Plugin, error
+        +LoadDir(dir string) []Plugin, error
+    }
+
+    class processPlugin {
+        -meta Metadata
+        -path string
+        -cmd *Cmd
+        -mu Mutex
+        +Name() string
+        +Version() string
+        +Init(ctx Context, cfg Config) error
+        +Start(ctx Context) error
+        +Stop(ctx Context) error
+        +HealthCheck(ctx Context) error
+    }
+
+    Loader <|.. SharedObjectLoader : implements
+    Loader <|.. ProcessLoader : implements
+    Plugin <|.. processPlugin : implements
+    SharedObjectLoader --> LoaderConfig : uses
+    ProcessLoader --> LoaderConfig : uses
+    ProcessLoader ..> processPlugin : creates
+    processPlugin --> Metadata : contains
+
+    %% === Package: sandbox ===
+
+    class Sandbox {
+        <<interface>>
+        +Execute(ctx Context, p Plugin, action Action) *Result, error
+    }
+
+    class ResourceLimits {
+        +MaxMemory int64
+        +MaxCPU int
+        +MaxDisk int64
+        +Timeout Duration
+    }
+
+    class SandboxConfig {
+        +Limits ResourceLimits
+        +AllowedSyscalls []string
+        +AllowNetwork bool
+        +WorkDir string
+    }
+
+    class Action {
+        +Name string
+        +Input any
+    }
+
+    class Result {
+        +ID string
+        +Output any
+        +Duration Duration
+        +Error string
+    }
+
+    class ProcessSandbox {
+        -config *SandboxConfig
+        -mu Mutex
+        +Execute(ctx Context, p Plugin, action Action) *Result, error
+    }
+
+    class InProcessSandbox {
+        -config *SandboxConfig
+        +Execute(ctx Context, p Plugin, action Action) *Result, error
+    }
+
+    Sandbox <|.. ProcessSandbox : implements
+    Sandbox <|.. InProcessSandbox : implements
+    ProcessSandbox --> SandboxConfig : uses
+    InProcessSandbox --> SandboxConfig : uses
+    SandboxConfig --> ResourceLimits : contains
+    Sandbox ..> Action : receives
+    Sandbox ..> Result : returns
+    Sandbox ..> Plugin : executes
+
+    %% === Package: structured ===
+
+    class Parser {
+        <<interface>>
+        +Parse(output string, schema *Schema) any, error
+    }
+
+    class Schema {
+        +Type string
+        +Properties map~string, *Schema~
+        +Required []string
+        +Items *Schema
+        +Enum []any
+        +Pattern string
+        +MinLength *int
+        +MaxLength *int
+        +Minimum *float64
+        +Maximum *float64
+        +MinItems *int
+        +MaxItems *int
+        +Description string
+    }
+
+    class JSONParser {
+        +Parse(output string, schema *Schema) any, error
+    }
+
+    class YAMLParser {
+        +Parse(output string, schema *Schema) any, error
+    }
+
+    class MarkdownParser {
+        +Parse(output string, schema *Schema) any, error
+    }
+
+    class Validator {
+        -strictMode bool
+        +Validate(output string, schema *Schema) *ValidationResult, error
+        +ValidateJSON(output string, schema *Schema) *ValidationResult, error
+        +Repair(output string, schema *Schema) string, error
+        -validateValue(value any, schema *Schema, path string) []ValidationError
+    }
+
+    class ValidationResult {
+        +Valid bool
+        +Errors []ValidationError
+        +Data any
+    }
+
+    class ValidationError {
+        +Path string
+        +Message string
+        +Value string
+    }
+
+    Parser <|.. JSONParser : implements
+    Parser <|.. YAMLParser : implements
+    Parser <|.. MarkdownParser : implements
+    Validator --> Schema : validates against
+    Validator ..> ValidationResult : returns
+    ValidationResult --> ValidationError : contains 0..*
+    Schema --> Schema : recursive (Properties, Items)

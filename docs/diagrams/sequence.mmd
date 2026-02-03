@@ -1,0 +1,111 @@
+sequenceDiagram
+    participant App as Application
+    participant Loader as loader.Loader
+    participant Reg as registry.Registry
+    participant Plugin as plugin.Plugin
+    participant Sandbox as sandbox.Sandbox
+
+    Note over App,Sandbox: Phase 1: Plugin Discovery and Loading
+
+    App->>Loader: NewSharedObjectLoader(cfg) / NewProcessLoader(cfg)
+    App->>Loader: LoadDir("./plugins")
+
+    loop For each file in directory
+        Loader->>Loader: validatePath(path)
+        Loader->>Loader: matchesPattern(filename)
+
+        alt SharedObjectLoader
+            Loader->>Loader: openPlugin(path)
+            Loader->>Loader: Lookup("Plugin") symbol
+        else ProcessLoader
+            Loader->>Plugin: exec --metadata
+            Plugin-->>Loader: JSON Metadata
+            Loader->>Loader: Create processPlugin adapter
+        end
+    end
+
+    Loader-->>App: []plugin.Plugin
+
+    Note over App,Sandbox: Phase 2: Registration and Dependency Setup
+
+    App->>Reg: New()
+    loop For each loaded plugin
+        App->>Reg: Register(plugin)
+        Reg->>Plugin: Name()
+        Reg->>Reg: Store in plugins map
+        Reg-->>App: nil / error (duplicate)
+    end
+
+    App->>Reg: SetDependencies("app", ["db", "cache"])
+    Reg->>Reg: Store dependency edges
+
+    Note over App,Sandbox: Phase 3: Initialization
+
+    loop For each plugin
+        App->>Plugin: Init(ctx, config)
+        Plugin->>Plugin: StateTracker.Transition(Uninitialized, Initialized)
+
+        alt processPlugin
+            Plugin->>Plugin: exec --init (stdin: JSON config)
+        end
+
+        Plugin-->>App: nil / error
+    end
+
+    Note over App,Sandbox: Phase 4: Dependency-Ordered Startup
+
+    App->>Reg: StartAll(ctx)
+    Reg->>Reg: resolveOrder() [Kahn's topological sort]
+    Reg->>Reg: Build in-degree map
+    Reg->>Reg: Seed queue with zero-degree nodes
+
+    loop For each plugin in topological order
+        Reg->>Plugin: Start(ctx)
+        Plugin->>Plugin: StateTracker.Transition(Initialized, Running)
+
+        alt processPlugin
+            Plugin->>Plugin: exec --run (long-running)
+        end
+
+        Plugin-->>Reg: nil / error
+    end
+
+    Reg-->>App: nil / error
+
+    Note over App,Sandbox: Phase 5: Runtime Operations (Sandboxed)
+
+    App->>Sandbox: NewProcessSandbox(cfg) / NewInProcessSandbox(cfg)
+    App->>Sandbox: Execute(ctx, plugin, Action{Name: "health"})
+
+    Sandbox->>Sandbox: Generate UUID for execution ID
+    Sandbox->>Sandbox: Apply timeout from ResourceLimits
+
+    alt ProcessSandbox
+        Sandbox->>Plugin: HealthCheck(ctx) [in goroutine]
+    else InProcessSandbox
+        Sandbox->>Plugin: HealthCheck(ctx) [synchronous]
+    end
+
+    Plugin-->>Sandbox: nil / error
+
+    Sandbox->>Sandbox: Record duration
+    Sandbox-->>App: Result{ID, Duration, Error}
+
+    Note over App,Sandbox: Phase 6: Reverse-Order Shutdown
+
+    App->>Reg: StopAll(ctx)
+    Reg->>Reg: resolveOrder() then reverse
+
+    loop For each plugin in reverse topological order
+        Reg->>Plugin: Stop(ctx)
+        Plugin->>Plugin: StateTracker.Transition(Running, Stopped)
+
+        alt processPlugin
+            Plugin->>Plugin: Signal SIGINT
+            Plugin->>Plugin: Wait / fallback SIGKILL
+        end
+
+        Plugin-->>Reg: nil / error (collected)
+    end
+
+    Reg-->>App: nil / joined errors
