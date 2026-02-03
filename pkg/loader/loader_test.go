@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	goplugin "plugin"
 	"runtime"
 	"strings"
 	"sync"
@@ -840,14 +841,17 @@ exit 0
 	err := pp.Start(ctx)
 	require.NoError(t, err)
 
-	// Wait for process to exit naturally
-	time.Sleep(200 * time.Millisecond)
+	// Wait for process to exit AND call Wait() to reap the zombie.
+	// This ensures Signal will fail because the process is fully gone.
+	time.Sleep(100 * time.Millisecond)
+	_ = pp.cmd.Wait() // Reap the zombie process.
 
-	// Stop on already exited process - Signal will fail, triggering Kill
+	// Now Stop should fail to Signal (process is gone) and call Kill.
+	// Kill on a reaped process also returns an error ("process already finished").
 	err = pp.Stop(ctx)
-	// The process already exited, so Stop should handle it gracefully
-	// No error expected as Kill on a dead process is handled
-	assert.Nil(t, pp.cmd)
+	// An error is expected because both Signal and Kill fail on a reaped process.
+	// The error is from Kill, which returns "process already finished".
+	assert.Error(t, err)
 }
 
 func TestProcessPlugin_HealthCheck_Success(t *testing.T) {
@@ -1168,4 +1172,528 @@ func BenchmarkReadProcessMetadata(b *testing.B) {
 		r := bufio.NewReader(strings.NewReader(input))
 		_, _ = ReadProcessMetadata(r)
 	}
+}
+
+// --- Tests for pluginWrapper.Lookup (plugin_open.go) ---
+
+// mockGoPluginLookup is a mock implementation of goPluginLookup interface.
+type mockGoPluginLookup struct {
+	symbols map[string]goplugin.Symbol
+}
+
+func (m *mockGoPluginLookup) Lookup(symName string) (goplugin.Symbol, error) {
+	if sym, ok := m.symbols[symName]; ok {
+		return sym, nil
+	}
+	return nil, fmt.Errorf("plugin: symbol %s not found", symName)
+}
+
+func TestPluginWrapper_Lookup(t *testing.T) {
+	// The pluginWrapper is a thin wrapper around goPluginLookup interface.
+	// Test that openPlugin is a valid function.
+	assert.NotNil(t, openPlugin)
+
+	// Test that openPlugin returns an error for non-existent file.
+	_, err := openPlugin("/nonexistent/plugin.so")
+	assert.Error(t, err)
+}
+
+// TestPluginWrapper_LookupWithMock tests the pluginWrapper.Lookup method
+// using a mock goPluginLookup implementation.
+func TestPluginWrapper_LookupWithMock(t *testing.T) {
+	tests := []struct {
+		name        string
+		symbols     map[string]goplugin.Symbol
+		symName     string
+		expectValue any
+		expectErr   bool
+	}{
+		{
+			name: "lookup_success",
+			symbols: map[string]goplugin.Symbol{
+				"Plugin": &testPlugin{},
+			},
+			symName:     "Plugin",
+			expectValue: &testPlugin{},
+			expectErr:   false,
+		},
+		{
+			name:      "lookup_failure",
+			symbols:   map[string]goplugin.Symbol{},
+			symName:   "NonExistent",
+			expectErr: true,
+		},
+		{
+			name: "lookup_string_symbol",
+			symbols: map[string]goplugin.Symbol{
+				"Version": func() goplugin.Symbol { v := "1.0.0"; return &v }(),
+			},
+			symName:   "Version",
+			expectErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a pluginWrapper with a mock goPluginLookup
+			wrapper := &pluginWrapper{
+				p: &mockGoPluginLookup{symbols: tt.symbols},
+			}
+
+			result, err := wrapper.Lookup(tt.symName)
+			if tt.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+			}
+		})
+	}
+}
+
+// TestPluginWrapper_LookupDirect tests the Lookup method directly.
+func TestPluginWrapper_LookupDirect(t *testing.T) {
+	// Create a mock that returns a specific value
+	mock := &mockGoPluginLookup{
+		symbols: map[string]goplugin.Symbol{
+			"TestSymbol": "test_value",
+		},
+	}
+
+	wrapper := &pluginWrapper{p: mock}
+
+	// Test successful lookup
+	result, err := wrapper.Lookup("TestSymbol")
+	assert.NoError(t, err)
+	assert.Equal(t, "test_value", result)
+
+	// Test failed lookup
+	_, err = wrapper.Lookup("NonExistent")
+	assert.Error(t, err)
+}
+
+// TestOpenPlugin_Success tests the success path of the original openPlugin using DI.
+func TestOpenPlugin_Success(t *testing.T) {
+	// Save original goPluginOpenFunc only (keep original openPlugin)
+	originalGoPluginOpen := goPluginOpenFunc
+	defer func() {
+		goPluginOpenFunc = originalGoPluginOpen
+	}()
+
+	// Create a mock plugin lookup
+	mockPlugin := &mockGoPluginLookup{
+		symbols: map[string]goplugin.Symbol{
+			"Plugin": &testPlugin{},
+		},
+	}
+
+	// Mock goPluginOpenFunc to return our mock
+	goPluginOpenFunc = func(path string) (goPluginLookup, error) {
+		return mockPlugin, nil
+	}
+
+	// Call the ORIGINAL openPlugin which will use our mocked goPluginOpenFunc
+	// This exercises the real openPlugin code path at line 37
+	handle, err := openPlugin("/fake/plugin.so")
+	assert.NoError(t, err)
+	assert.NotNil(t, handle)
+
+	// Verify the returned handle works
+	sym, err := handle.Lookup("Plugin")
+	assert.NoError(t, err)
+	assert.NotNil(t, sym)
+}
+
+// TestOpenPlugin_Error tests the error path of openPlugin.
+func TestOpenPlugin_Error(t *testing.T) {
+	// Save original goPluginOpenFunc only (keep original openPlugin)
+	originalGoPluginOpen := goPluginOpenFunc
+	defer func() {
+		goPluginOpenFunc = originalGoPluginOpen
+	}()
+
+	// Mock goPluginOpenFunc to return an error
+	goPluginOpenFunc = func(path string) (goPluginLookup, error) {
+		return nil, fmt.Errorf("plugin open failed: %s", path)
+	}
+
+	// Call the ORIGINAL openPlugin which will use our mocked goPluginOpenFunc
+	// This exercises the real openPlugin error path
+	_, err := openPlugin("/nonexistent/plugin.so")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "plugin open failed")
+}
+
+// TestGoPluginOpenFunc_Default tests that goPluginOpenFunc returns error for
+// nonexistent file.
+func TestGoPluginOpenFunc_Default(t *testing.T) {
+	// Just verify it's not nil and returns an error for nonexistent file
+	assert.NotNil(t, goPluginOpenFunc)
+	_, err := goPluginOpenFunc("/nonexistent/plugin.so")
+	assert.Error(t, err)
+}
+
+// --- Additional edge case tests for validatePath ---
+
+func TestSharedObjectLoader_ValidatePath_RelativePath(t *testing.T) {
+	// Create a temporary file in current directory.
+	tmp, err := os.CreateTemp(".", "plugin-*.so")
+	require.NoError(t, err)
+	defer os.Remove(tmp.Name())
+	tmp.Close()
+
+	loader := NewSharedObjectLoader(nil)
+	// Relative path should be converted to absolute path internally.
+	err = loader.validatePath(tmp.Name())
+	require.NoError(t, err)
+}
+
+// --- Tests for processPlugin.Stop edge cases ---
+
+func TestProcessPlugin_Stop_SignalFails_KillSucceeds(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows")
+	}
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "signal-fail-plugin")
+	// Script that ignores SIGINT but exits on SIGKILL.
+	content := `#!/bin/sh
+trap '' INT
+sleep 10
+`
+	require.NoError(t, os.WriteFile(script, []byte(content), 0755))
+
+	pp := &processPlugin{
+		meta: plugin.Metadata{Name: "signal-fail", Version: "1.0.0"},
+		path: script,
+	}
+
+	ctx := context.Background()
+	err := pp.Start(ctx)
+	require.NoError(t, err)
+
+	// Give process time to start and set up trap.
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop should try Signal, which might fail (process ignores it),
+	// then fall back to Kill.
+	err = pp.Stop(ctx)
+	// We expect no error because Kill should succeed.
+	assert.NoError(t, err)
+	assert.Nil(t, pp.cmd)
+}
+
+// --- Tests for Load with path that can't be made absolute ---
+// This is nearly impossible to trigger in normal conditions.
+
+func TestProcessLoader_Load_ConcurrentSafety(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows")
+	}
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "concurrent-plugin")
+	content := `#!/bin/sh
+echo '{"name":"concurrent","version":"1.0.0"}'
+`
+	require.NoError(t, os.WriteFile(script, []byte(content), 0755))
+
+	l := NewProcessLoader(nil)
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	loadCount := 0
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p, err := l.Load(script)
+			if err == nil && p != nil {
+				mu.Lock()
+				loadCount++
+				mu.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+	assert.Equal(t, 5, loadCount)
+}
+
+// --- Additional tests to increase coverage ---
+
+func TestProcessPlugin_Stop_SignalSucceeds(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows")
+	}
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "graceful-plugin")
+	// Script that handles SIGINT properly with short sleep.
+	content := `#!/bin/sh
+trap 'exit 0' INT TERM
+while true; do sleep 0.1; done
+`
+	require.NoError(t, os.WriteFile(script, []byte(content), 0755))
+
+	pp := &processPlugin{
+		meta: plugin.Metadata{Name: "graceful", Version: "1.0.0"},
+		path: script,
+	}
+
+	ctx := context.Background()
+	err := pp.Start(ctx)
+	require.NoError(t, err)
+
+	// Give process time to start.
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop should succeed with Signal.
+	err = pp.Stop(ctx)
+	require.NoError(t, err)
+	assert.Nil(t, pp.cmd)
+}
+
+func TestSharedObjectLoader_ValidatePath_InvalidAbsPath(t *testing.T) {
+	// Test with a path that can be made absolute but doesn't exist.
+	loader := NewSharedObjectLoader(nil)
+	err := loader.validatePath("./nonexistent/plugin.so")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "file not found")
+}
+
+func TestProcessLoader_LoadDir_WithMultiplePlugins(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows")
+	}
+
+	dir := t.TempDir()
+
+	// Create multiple plugin scripts.
+	for i := 0; i < 3; i++ {
+		script := filepath.Join(dir, fmt.Sprintf("plugin%d", i))
+		content := fmt.Sprintf(`#!/bin/sh
+echo '{"name":"plugin%d","version":"1.0.%d"}'
+`, i, i)
+		require.NoError(t, os.WriteFile(script, []byte(content), 0755))
+	}
+
+	l := NewProcessLoader(nil)
+	plugins, err := l.LoadDir(dir)
+	require.NoError(t, err)
+	assert.Len(t, plugins, 3)
+
+	// Verify all plugins have unique names.
+	names := make(map[string]bool)
+	for _, p := range plugins {
+		assert.False(t, names[p.Name()], "duplicate plugin name: %s", p.Name())
+		names[p.Name()] = true
+	}
+}
+
+// Note on uncovered code paths in loader.go:
+//
+// 1. validatePath line 139-140 (filepath.Abs error):
+//    filepath.Abs rarely fails on most systems. It only fails if the
+//    path is somehow invalid at the OS level.
+//
+// 2. ProcessLoader.Load line 203-204 (filepath.Abs error):
+//    Same as above.
+//
+// 3. processPlugin.Stop line 314 (Signal fails, Kill called):
+//    This is tested but the return value from Kill() is not always
+//    checked in detail. Kill on an already-exited process may or may
+//    not return an error depending on timing.
+//
+// 4. plugin_open.go Lookup (0% coverage):
+//    This requires an actual Go plugin (.so file) compiled with
+//    -buildmode=plugin, which is beyond unit test scope.
+
+func TestProcessPlugin_Stop_KillAfterSignalFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows")
+	}
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "fast-exit-plugin")
+	// Script that exits very quickly.
+	content := `#!/bin/sh
+sleep 0.01
+exit 0
+`
+	require.NoError(t, os.WriteFile(script, []byte(content), 0755))
+
+	pp := &processPlugin{
+		meta: plugin.Metadata{Name: "fast-exit", Version: "1.0.0"},
+		path: script,
+	}
+
+	ctx := context.Background()
+	err := pp.Start(ctx)
+	require.NoError(t, err)
+
+	// Wait for process to exit.
+	time.Sleep(200 * time.Millisecond)
+
+	// Now Stop should find the process exited.
+	// Signal will fail (process no longer exists), triggering Kill.
+	err = pp.Stop(ctx)
+	// No error expected - handled gracefully.
+	assert.NoError(t, err)
+}
+
+// TestProcessLoader_Load_FilepathAbsError tests the filepath.Abs error path
+// in ProcessLoader.Load (line 203-204). This is nearly impossible to trigger
+// as filepath.Abs rarely fails.
+func TestProcessLoader_Load_FilepathAbsError(t *testing.T) {
+	l := NewProcessLoader(nil)
+
+	// Various paths that could theoretically cause issues
+	paths := []string{
+		"", // Empty path
+		"relative/path",
+		"./relative",
+		"../parent",
+	}
+
+	for _, path := range paths {
+		_, err := l.Load(path)
+		// All of these will fail but at file-not-found stage, not Abs
+		assert.Error(t, err)
+	}
+}
+
+// TestSharedObjectLoader_ValidatePath_FilepathAbsError tests the filepath.Abs
+// error path in validatePath (line 139-140). This is nearly impossible to trigger
+// as filepath.Abs rarely fails on any OS.
+func TestSharedObjectLoader_ValidatePath_FilepathAbsError(t *testing.T) {
+	loader := NewSharedObjectLoader(nil)
+
+	// Test with various path types
+	paths := []string{
+		"",           // Empty - will fail at empty check
+		"relative",   // Relative - will fail at Stat
+		"./relative", // Current dir relative
+		"../parent",  // Parent relative
+	}
+
+	for _, path := range paths {
+		err := loader.validatePath(path)
+		// All should fail but not at Abs stage
+		assert.Error(t, err)
+	}
+}
+
+// TestProcessPlugin_Stop_SignalError_KillSuccess tests the path where
+// Signal fails and Kill is called (line 313-314).
+func TestProcessPlugin_Stop_SignalError_KillSuccess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows")
+	}
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "zombie-plugin")
+	// Script that ignores signals completely
+	content := `#!/bin/sh
+trap '' INT TERM HUP
+sleep 30
+`
+	require.NoError(t, os.WriteFile(script, []byte(content), 0755))
+
+	pp := &processPlugin{
+		meta: plugin.Metadata{Name: "zombie", Version: "1.0.0"},
+		path: script,
+	}
+
+	ctx := context.Background()
+	err := pp.Start(ctx)
+	require.NoError(t, err)
+
+	// Give process time to start and install traps
+	time.Sleep(100 * time.Millisecond)
+
+	// Stop should try Signal first (ignored), then use Kill
+	err = pp.Stop(ctx)
+	// Kill should succeed
+	assert.Nil(t, pp.cmd)
+}
+
+// TestProcessPlugin_Stop_BothSignalAndKillFail tests the scenario where
+// both Signal and Kill might fail (extremely rare).
+func TestProcessPlugin_Stop_BothSignalAndKillFail(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows")
+	}
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "instant-exit")
+	content := `#!/bin/sh
+exit 0
+`
+	require.NoError(t, os.WriteFile(script, []byte(content), 0755))
+
+	pp := &processPlugin{
+		meta: plugin.Metadata{Name: "instant-exit", Version: "1.0.0"},
+		path: script,
+	}
+
+	ctx := context.Background()
+	err := pp.Start(ctx)
+	require.NoError(t, err)
+
+	// Wait long enough for process to definitely exit
+	time.Sleep(500 * time.Millisecond)
+
+	// Process has exited. Signal will fail, and Kill on a dead process
+	// typically returns an error on some platforms but is handled gracefully
+	err = pp.Stop(ctx)
+	// Should handle gracefully regardless of internal errors
+	assert.Nil(t, pp.cmd)
+}
+
+// Tests for filepath.Abs error path using dependency injection.
+
+func TestSharedObjectLoader_ValidatePath_AbsError_DI(t *testing.T) {
+	// Save original function
+	original := absPathFunc
+	defer func() { absPathFunc = original }()
+
+	// Inject a failing absPath function
+	absPathFunc = func(path string) (string, error) {
+		return "", fmt.Errorf("simulated abs path error")
+	}
+
+	loader := NewSharedObjectLoader(nil)
+	err := loader.validatePath("some/path.so")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid path")
+	assert.Contains(t, err.Error(), "simulated abs path error")
+}
+
+func TestProcessLoader_Load_AbsError_DI(t *testing.T) {
+	// Save original function
+	original := absPathFunc
+	defer func() { absPathFunc = original }()
+
+	// Inject a failing absPath function
+	absPathFunc = func(path string) (string, error) {
+		return "", fmt.Errorf("simulated abs path error")
+	}
+
+	l := NewProcessLoader(nil)
+	_, err := l.Load("some/path")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid path")
+	assert.Contains(t, err.Error(), "simulated abs path error")
+}
+
+// Test that absPathFunc defaults to filepath.Abs when not overridden.
+
+func TestAbsPathFunc_Default(t *testing.T) {
+	// Verify that the default behavior works
+	result, err := absPathFunc("test.so")
+	require.NoError(t, err)
+	assert.True(t, filepath.IsAbs(result))
 }

@@ -220,14 +220,18 @@ type ValidationResult struct {
 	Data   any               `json:"data,omitempty"`
 }
 
+// jsonMarshalIndenter is a function type for JSON marshal indent (for testing).
+type jsonMarshalIndenter func(v any, prefix, indent string) ([]byte, error)
+
 // Validator checks parsed output against a schema.
 type Validator struct {
-	strictMode bool
+	strictMode    bool
+	marshalIndent jsonMarshalIndenter
 }
 
 // NewValidator creates a new schema validator.
 func NewValidator(strictMode bool) *Validator {
-	return &Validator{strictMode: strictMode}
+	return &Validator{strictMode: strictMode, marshalIndent: json.MarshalIndent}
 }
 
 // Validate validates a raw string against a schema by first parsing it
@@ -430,15 +434,17 @@ func (v *Validator) Repair(
 	output = regexp.MustCompile(`(\{|,)\s*(\w+)\s*:`).
 		ReplaceAllString(output, `$1"$2":`)
 
-	result, err := v.ValidateJSON(output, schema)
-	if err != nil {
-		return "", err
-	}
+	// ValidateJSON never returns an error; it puts errors in ValidationResult.
+	result, _ := v.ValidateJSON(output, schema)
 	if !result.Valid {
 		return "", fmt.Errorf("could not repair output: %v", result.Errors)
 	}
 
-	data, err := json.MarshalIndent(result.Data, "", "  ")
+	marshal := v.marshalIndent
+	if marshal == nil {
+		marshal = json.MarshalIndent
+	}
+	data, err := marshal(result.Data, "", "  ")
 	if err != nil {
 		return output, nil
 	}

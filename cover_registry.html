@@ -1,0 +1,418 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>registry: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">digital.vasic.plugins/pkg/registry/registry.go (97.2%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">no coverage</span>
+				<span class="cov1">low coverage</span>
+				<span class="cov2">*</span>
+				<span class="cov3">*</span>
+				<span class="cov4">*</span>
+				<span class="cov5">*</span>
+				<span class="cov6">*</span>
+				<span class="cov7">*</span>
+				<span class="cov8">*</span>
+				<span class="cov9">*</span>
+				<span class="cov10">high coverage</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">// Package registry provides a thread-safe plugin registry with dependency
+// ordering, version constraint checking, and lifecycle management.
+package registry
+
+import (
+        "context"
+        "fmt"
+        "strconv"
+        "strings"
+        "sync"
+
+        "digital.vasic.plugins/pkg/plugin"
+)
+
+// Registry manages registered plugins with thread-safe operations.
+type Registry struct {
+        mu      sync.RWMutex
+        plugins map[string]plugin.Plugin
+        deps    map[string][]string // plugin name -&gt; dependency names
+}
+
+// New creates a new empty Registry.
+func New() *Registry <span class="cov4" title="33">{
+        return &amp;Registry{
+                plugins: make(map[string]plugin.Plugin),
+                deps:    make(map[string][]string),
+        }
+}</span>
+
+// Register adds a plugin to the registry. Returns an error if a plugin
+// with the same name is already registered.
+func (r *Registry) Register(p plugin.Plugin) error <span class="cov6" title="140">{
+        if p == nil </span><span class="cov1" title="1">{
+                return fmt.Errorf("cannot register nil plugin")
+        }</span>
+
+        <span class="cov6" title="139">r.mu.Lock()
+        defer r.mu.Unlock()
+
+        name := p.Name()
+        if name == "" </span><span class="cov1" title="1">{
+                return fmt.Errorf("plugin name cannot be empty")
+        }</span>
+
+        <span class="cov6" title="138">if _, exists := r.plugins[name]; exists </span><span class="cov1" title="1">{
+                return fmt.Errorf("plugin %s already registered", name)
+        }</span>
+
+        <span class="cov6" title="137">r.plugins[name] = p
+        return nil</span>
+}
+
+// Get returns the plugin with the given name and true, or nil and false
+// if not found.
+func (r *Registry) Get(name string) (plugin.Plugin, bool) <span class="cov5" title="104">{
+        r.mu.RLock()
+        defer r.mu.RUnlock()
+
+        p, exists := r.plugins[name]
+        return p, exists
+}</span>
+
+// List returns the names of all registered plugins.
+func (r *Registry) List() []string <span class="cov5" title="103">{
+        r.mu.RLock()
+        defer r.mu.RUnlock()
+
+        names := make([]string, 0, len(r.plugins))
+        for name := range r.plugins </span><span class="cov10" title="5178">{
+                names = append(names, name)
+        }</span>
+        <span class="cov5" title="103">return names</span>
+}
+
+// Remove unregisters a plugin by name. Returns an error if not found.
+func (r *Registry) Remove(name string) error <span class="cov2" title="3">{
+        r.mu.Lock()
+        defer r.mu.Unlock()
+
+        if _, exists := r.plugins[name]; !exists </span><span class="cov1" title="1">{
+                return fmt.Errorf("plugin %s not found", name)
+        }</span>
+
+        <span class="cov1" title="2">delete(r.plugins, name)
+        delete(r.deps, name)
+        return nil</span>
+}
+
+// SetDependencies declares that pluginName depends on the given list
+// of dependency names. Used by StartAll/StopAll for ordering.
+func (r *Registry) SetDependencies(pluginName string, dependencies []string) error <span class="cov3" title="12">{
+        r.mu.Lock()
+        defer r.mu.Unlock()
+
+        if _, exists := r.plugins[pluginName]; !exists </span><span class="cov1" title="1">{
+                return fmt.Errorf("plugin %s not found", pluginName)
+        }</span>
+
+        <span class="cov3" title="11">r.deps[pluginName] = dependencies
+        return nil</span>
+}
+
+// StartAll starts all registered plugins in dependency order.
+// Plugins with no dependencies are started first. If a cycle is
+// detected an error is returned.
+func (r *Registry) StartAll(ctx context.Context) error <span class="cov3" title="13">{
+        r.mu.RLock()
+        order, err := r.resolveOrder()
+        plugins := r.plugins
+        r.mu.RUnlock()
+
+        if err != nil </span><span class="cov1" title="2">{
+                return fmt.Errorf("dependency resolution failed: %w", err)
+        }</span>
+
+        <span class="cov3" title="11">for _, name := range order </span><span class="cov3" title="17">{
+                p, ok := plugins[name]
+                if !ok </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+                <span class="cov3" title="17">if err := p.Start(ctx); err != nil </span><span class="cov1" title="1">{
+                        return fmt.Errorf("failed to start plugin %s: %w", name, err)
+                }</span>
+        }
+        <span class="cov3" title="10">return nil</span>
+}
+
+// StopAll stops all registered plugins in reverse dependency order.
+func (r *Registry) StopAll(ctx context.Context) error <span class="cov3" title="8">{
+        r.mu.RLock()
+        order, err := r.resolveOrder()
+        plugins := r.plugins
+        r.mu.RUnlock()
+
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("dependency resolution failed: %w", err)
+        }</span>
+
+        // Reverse order: dependents stop before dependencies.
+        <span class="cov3" title="8">var errs []string
+        for i := len(order) - 1; i &gt;= 0; i-- </span><span class="cov3" title="11">{
+                name := order[i]
+                p, ok := plugins[name]
+                if !ok </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+                <span class="cov3" title="11">if err := p.Stop(ctx); err != nil </span><span class="cov2" title="4">{
+                        errs = append(errs, fmt.Sprintf("%s: %v", name, err))
+                }</span>
+        }
+
+        <span class="cov3" title="8">if len(errs) &gt; 0 </span><span class="cov2" title="3">{
+                return fmt.Errorf("errors stopping plugins: %s",
+                        strings.Join(errs, "; "))
+        }</span>
+        <span class="cov2" title="5">return nil</span>
+}
+
+// resolveOrder performs topological sort (Kahn's algorithm) on the
+// dependency graph. Must be called with at least r.mu.RLock held.
+func (r *Registry) resolveOrder() ([]string, error) <span class="cov4" title="21">{
+        inDegree := make(map[string]int)
+        for name := range r.plugins </span><span class="cov4" title="31">{
+                inDegree[name] = 0
+        }</span>
+
+        // Build in-degree map.
+        <span class="cov4" title="21">for name, deps := range r.deps </span><span class="cov3" title="12">{
+                if _, ok := r.plugins[name]; !ok </span><span class="cov1" title="1">{
+                        continue</span>
+                }
+                <span class="cov3" title="11">for _, dep := range deps </span><span class="cov3" title="11">{
+                        if _, ok := r.plugins[dep]; ok </span><span class="cov3" title="9">{
+                                inDegree[name]++
+                        }</span>
+                }
+        }
+
+        // Seed queue with zero in-degree nodes.
+        <span class="cov4" title="21">var queue []string
+        for name, deg := range inDegree </span><span class="cov4" title="31">{
+                if deg == 0 </span><span class="cov4" title="22">{
+                        queue = append(queue, name)
+                }</span>
+        }
+
+        <span class="cov4" title="21">var order []string
+        for len(queue) &gt; 0 </span><span class="cov4" title="28">{
+                node := queue[0]
+                queue = queue[1:]
+                order = append(order, node)
+
+                // Find plugins that depend on node and decrement their in-degree.
+                for name, deps := range r.deps </span><span class="cov4" title="22">{
+                        if _, ok := r.plugins[name]; !ok </span><span class="cov1" title="1">{
+                                continue</span>
+                        }
+                        <span class="cov4" title="21">for _, dep := range deps </span><span class="cov4" title="21">{
+                                if dep == node </span><span class="cov2" title="6">{
+                                        inDegree[name]--
+                                        if inDegree[name] == 0 </span><span class="cov2" title="6">{
+                                                queue = append(queue, name)
+                                        }</span>
+                                }
+                        }
+                }
+        }
+
+        <span class="cov4" title="21">if len(order) != len(r.plugins) </span><span class="cov1" title="2">{
+                return nil, fmt.Errorf("circular dependency detected")
+        }</span>
+
+        <span class="cov4" title="19">return order, nil</span>
+}
+
+// CheckVersionConstraint checks whether a plugin's version satisfies a
+// semver constraint. Supported operators: =, &gt;=, &lt;=, &gt;, &lt;, ^, ~.
+func CheckVersionConstraint(version, constraint string) (bool, error) <span class="cov4" title="40">{
+        constraint = strings.TrimSpace(constraint)
+        if constraint == "" || constraint == "*" </span><span class="cov1" title="2">{
+                return true, nil
+        }</span>
+
+        <span class="cov4" title="38">var op string
+        var target string
+
+        for _, prefix := range []string{"&gt;=", "&lt;=", "^", "~", "&gt;", "&lt;", "="} </span><span class="cov6" title="184">{
+                if strings.HasPrefix(constraint, prefix) </span><span class="cov4" title="24">{
+                        op = prefix
+                        target = strings.TrimSpace(constraint[len(prefix):])
+                        break</span>
+                }
+        }
+        <span class="cov4" title="38">if op == "" </span><span class="cov3" title="14">{
+                op = "="
+                target = constraint
+        }</span>
+
+        <span class="cov4" title="38">vParts, err := parseSemver(version)
+        if err != nil </span><span class="cov2" title="6">{
+                return false, fmt.Errorf("invalid version %q: %w", version, err)
+        }</span>
+        <span class="cov4" title="32">tParts, err := parseSemver(target)
+        if err != nil </span><span class="cov2" title="4">{
+                return false, fmt.Errorf("invalid constraint version %q: %w", target, err)
+        }</span>
+
+        <span class="cov4" title="28">cmp := compareSemver(vParts, tParts)
+
+        switch op </span>{
+        case "=":<span class="cov2" title="6">
+                return cmp == 0, nil</span>
+        case "&gt;=":<span class="cov2" title="4">
+                return cmp &gt;= 0, nil</span>
+        case "&lt;=":<span class="cov1" title="2">
+                return cmp &lt;= 0, nil</span>
+        case "&gt;":<span class="cov1" title="2">
+                return cmp &gt; 0, nil</span>
+        case "&lt;":<span class="cov1" title="2">
+                return cmp &lt; 0, nil</span>
+        case "^":<span class="cov2" title="6">
+                // ^1.2.3 means &gt;=1.2.3, &lt;2.0.0
+                if cmp &lt; 0 </span><span class="cov1" title="1">{
+                        return false, nil
+                }</span>
+                <span class="cov2" title="5">next := [3]int{tParts[0] + 1, 0, 0}
+                return compareSemver(vParts, next) &lt; 0, nil</span>
+        case "~":<span class="cov2" title="6">
+                // ~1.2.3 means &gt;=1.2.3, &lt;1.3.0
+                if cmp &lt; 0 </span><span class="cov1" title="1">{
+                        return false, nil
+                }</span>
+                <span class="cov2" title="5">next := [3]int{tParts[0], tParts[1] + 1, 0}
+                return compareSemver(vParts, next) &lt; 0, nil</span>
+        default:<span class="cov0" title="0">
+                return false, fmt.Errorf("unsupported operator: %s", op)</span>
+        }
+}
+
+func parseSemver(v string) ([3]int, error) <span class="cov5" title="70">{
+        parts := strings.SplitN(v, ".", 3)
+        if len(parts) != 3 </span><span class="cov2" title="4">{
+                return [3]int{}, fmt.Errorf("expected major.minor.patch, got %q", v)
+        }</span>
+        <span class="cov5" title="66">var result [3]int
+        for i, p := range parts </span><span class="cov6" title="192">{
+                n, err := strconv.Atoi(p)
+                if err != nil </span><span class="cov2" title="6">{
+                        return [3]int{}, fmt.Errorf("invalid number %q: %w", p, err)
+                }</span>
+                <span class="cov6" title="186">result[i] = n</span>
+        }
+        <span class="cov5" title="60">return result, nil</span>
+}
+
+func compareSemver(a, b [3]int) int <span class="cov4" title="38">{
+        for i := 0; i &lt; 3; i++ </span><span class="cov5" title="87">{
+                if a[i] &lt; b[i] </span><span class="cov3" title="14">{
+                        return -1
+                }</span>
+                <span class="cov5" title="73">if a[i] &gt; b[i] </span><span class="cov3" title="12">{
+                        return 1
+                }</span>
+        }
+        <span class="cov3" title="12">return 0</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

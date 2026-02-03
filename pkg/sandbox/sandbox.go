@@ -88,10 +88,14 @@ type Sandbox interface {
 
 // --- ProcessSandbox ---
 
+// jsonMarshaler is a function type for JSON marshaling (for testing).
+type jsonMarshaler func(v interface{}) ([]byte, error)
+
 // ProcessSandbox runs plugin actions as separate OS processes.
 type ProcessSandbox struct {
-	config *Config
-	mu     sync.Mutex
+	config      *Config
+	mu          sync.Mutex
+	marshalJSON jsonMarshaler
 }
 
 // NewProcessSandbox creates a sandbox that isolates execution in a
@@ -126,7 +130,11 @@ func (s *ProcessSandbox) Execute(
 	defer cancel()
 
 	// Build the action payload.
-	payload, err := json.Marshal(action)
+	marshal := s.marshalJSON
+	if marshal == nil {
+		marshal = json.Marshal
+	}
+	payload, err := marshal(action)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal action: %w", err)
 	}

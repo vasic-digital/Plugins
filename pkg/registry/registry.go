@@ -12,11 +12,15 @@ import (
 	"digital.vasic.plugins/pkg/plugin"
 )
 
+// orderResolver is a function type for dependency order resolution (for testing).
+type orderResolver func() ([]string, error)
+
 // Registry manages registered plugins with thread-safe operations.
 type Registry struct {
-	mu      sync.RWMutex
-	plugins map[string]plugin.Plugin
-	deps    map[string][]string // plugin name -> dependency names
+	mu               sync.RWMutex
+	plugins          map[string]plugin.Plugin
+	deps             map[string][]string // plugin name -> dependency names
+	resolveOrderFunc orderResolver       // injectable for testing
 }
 
 // New creates a new empty Registry.
@@ -105,7 +109,11 @@ func (r *Registry) SetDependencies(pluginName string, dependencies []string) err
 // detected an error is returned.
 func (r *Registry) StartAll(ctx context.Context) error {
 	r.mu.RLock()
-	order, err := r.resolveOrder()
+	resolver := r.resolveOrderFunc
+	if resolver == nil {
+		resolver = r.resolveOrder
+	}
+	order, err := resolver()
 	plugins := r.plugins
 	r.mu.RUnlock()
 
@@ -128,7 +136,11 @@ func (r *Registry) StartAll(ctx context.Context) error {
 // StopAll stops all registered plugins in reverse dependency order.
 func (r *Registry) StopAll(ctx context.Context) error {
 	r.mu.RLock()
-	order, err := r.resolveOrder()
+	resolver := r.resolveOrderFunc
+	if resolver == nil {
+		resolver = r.resolveOrder
+	}
+	order, err := resolver()
 	plugins := r.plugins
 	r.mu.RUnlock()
 
@@ -221,20 +233,7 @@ func CheckVersionConstraint(version, constraint string) (bool, error) {
 		return true, nil
 	}
 
-	var op string
-	var target string
-
-	for _, prefix := range []string{">=", "<=", "^", "~", ">", "<", "="} {
-		if strings.HasPrefix(constraint, prefix) {
-			op = prefix
-			target = strings.TrimSpace(constraint[len(prefix):])
-			break
-		}
-	}
-	if op == "" {
-		op = "="
-		target = constraint
-	}
+	op, target := parseConstraintOp(constraint)
 
 	vParts, err := parseSemver(version)
 	if err != nil {
@@ -245,6 +244,22 @@ func CheckVersionConstraint(version, constraint string) (bool, error) {
 		return false, fmt.Errorf("invalid constraint version %q: %w", target, err)
 	}
 
+	return checkSemverConstraint(vParts, tParts, op)
+}
+
+// parseConstraintOp extracts the operator and target version from a constraint.
+func parseConstraintOp(constraint string) (op, target string) {
+	for _, prefix := range []string{">=", "<=", "^", "~", ">", "<", "="} {
+		if strings.HasPrefix(constraint, prefix) {
+			return prefix, strings.TrimSpace(constraint[len(prefix):])
+		}
+	}
+	// No operator found, treat as exact match.
+	return "=", constraint
+}
+
+// checkSemverConstraint compares version parts against a constraint.
+func checkSemverConstraint(vParts, tParts [3]int, op string) (bool, error) {
 	cmp := compareSemver(vParts, tParts)
 
 	switch op {
@@ -266,7 +281,7 @@ func CheckVersionConstraint(version, constraint string) (bool, error) {
 		next := [3]int{tParts[0] + 1, 0, 0}
 		return compareSemver(vParts, next) < 0, nil
 	case "~":
-		// ~1.2.3 means >=1.2.3, <1.3.0
+		// ~1.2.3 means >=1.2.3, <1.3.0.
 		if cmp < 0 {
 			return false, nil
 		}

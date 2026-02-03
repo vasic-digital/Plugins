@@ -130,12 +130,15 @@ func (l *SharedObjectLoader) LoadDir(dir string) ([]plugin.Plugin, error) {
 	return plugins, nil
 }
 
+// absPathFunc is a function type for getting absolute paths (for testing).
+var absPathFunc = filepath.Abs
+
 func (l *SharedObjectLoader) validatePath(path string) error {
 	if path == "" {
 		return fmt.Errorf("empty path")
 	}
 
-	absPath, err := filepath.Abs(path)
+	absPath, err := absPathFunc(path)
 	if err != nil {
 		return fmt.Errorf("invalid path: %w", err)
 	}
@@ -199,7 +202,7 @@ func (l *ProcessLoader) Load(path string) (plugin.Plugin, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	absPath, err := filepath.Abs(path)
+	absPath, err := absPathFunc(path)
 	if err != nil {
 		return nil, fmt.Errorf("invalid path: %w", err)
 	}
