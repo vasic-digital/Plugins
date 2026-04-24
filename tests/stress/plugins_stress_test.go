@@ -28,7 +28,7 @@ func (p *stressPlugin) HealthCheck(_ context.Context) error           { return n
 
 func TestRegistryConcurrentRegisterAndGet_Stress(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping stress test in short mode")
+		t.Skip("skipping stress test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	reg := registry.New()
@@ -68,7 +68,7 @@ func TestRegistryConcurrentRegisterAndGet_Stress(t *testing.T) {
 
 func TestRegistryConcurrentListAndRemove_Stress(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping stress test in short mode")
+		t.Skip("skipping stress test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	reg := registry.New()
@@ -101,7 +101,7 @@ func TestRegistryConcurrentListAndRemove_Stress(t *testing.T) {
 
 func TestStateTrackerConcurrentTransitions_Stress(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping stress test in short mode")
+		t.Skip("skipping stress test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	const goroutines = 100
@@ -132,7 +132,7 @@ func TestStateTrackerConcurrentTransitions_Stress(t *testing.T) {
 
 func TestSandboxConcurrentExecutions_Stress(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping stress test in short mode")
+		t.Skip("skipping stress test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	cfg := sandbox.DefaultConfig()
@@ -160,7 +160,7 @@ func TestSandboxConcurrentExecutions_Stress(t *testing.T) {
 
 func TestJSONParserConcurrentParsing_Stress(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping stress test in short mode")
+		t.Skip("skipping stress test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	parser := structured.NewJSONParser()
@@ -182,7 +182,7 @@ func TestJSONParserConcurrentParsing_Stress(t *testing.T) {
 
 func TestVersionConstraintConcurrentChecks_Stress(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping stress test in short mode")
+		t.Skip("skipping stress test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	const goroutines = 100

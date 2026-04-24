@@ -30,7 +30,7 @@ func (p *testPlugin) HealthCheck(_ context.Context) error           { return nil
 
 func TestRegistryWithPluginLifecycle_Integration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
+		t.Skip("skipping integration test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	reg := registry.New()
@@ -70,7 +70,7 @@ func TestRegistryWithPluginLifecycle_Integration(t *testing.T) {
 
 func TestRegistryLookupAndRemove_Integration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
+		t.Skip("skipping integration test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	reg := registry.New()
@@ -98,7 +98,7 @@ func TestRegistryLookupAndRemove_Integration(t *testing.T) {
 
 func TestVersionConstraintChecking_Integration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
+		t.Skip("skipping integration test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	testCases := []struct {
@@ -129,7 +129,7 @@ func TestVersionConstraintChecking_Integration(t *testing.T) {
 
 func TestSandboxWithPluginExecution_Integration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
+		t.Skip("skipping integration test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	cfg := sandbox.DefaultConfig()
@@ -152,7 +152,7 @@ func TestSandboxWithPluginExecution_Integration(t *testing.T) {
 
 func TestStructuredParsingWithValidation_Integration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
+		t.Skip("skipping integration test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	// Parse JSON and validate
@@ -181,7 +181,7 @@ func TestStructuredParsingWithValidation_Integration(t *testing.T) {
 
 func TestStructuredYAMLParsing_Integration(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
+		t.Skip("skipping integration test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	yamlParser := structured.NewYAMLParser()

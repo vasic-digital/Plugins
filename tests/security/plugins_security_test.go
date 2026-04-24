@@ -27,7 +27,7 @@ func (p *secPlugin) HealthCheck(_ context.Context) error           { return nil 
 
 func TestNilPluginRegistration_Security(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping security test in short mode")
+		t.Skip("skipping security test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	reg := registry.New()
@@ -39,7 +39,7 @@ func TestNilPluginRegistration_Security(t *testing.T) {
 
 func TestEmptyNameRegistration_Security(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping security test in short mode")
+		t.Skip("skipping security test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	reg := registry.New()
@@ -52,7 +52,7 @@ func TestEmptyNameRegistration_Security(t *testing.T) {
 
 func TestDuplicateRegistration_Security(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping security test in short mode")
+		t.Skip("skipping security test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	reg := registry.New()
@@ -67,7 +67,7 @@ func TestDuplicateRegistration_Security(t *testing.T) {
 
 func TestMetadataValidation_Security(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping security test in short mode")
+		t.Skip("skipping security test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	testCases := []struct {
@@ -95,7 +95,7 @@ func TestMetadataValidation_Security(t *testing.T) {
 
 func TestNilConfigAccessorSafety_Security(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping security test in short mode")
+		t.Skip("skipping security test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	var cfg plugin.Config // nil
@@ -110,7 +110,7 @@ func TestNilConfigAccessorSafety_Security(t *testing.T) {
 
 func TestSandboxNilPluginHandling_Security(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping security test in short mode")
+		t.Skip("skipping security test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	ctx := context.Background()
@@ -131,7 +131,7 @@ func TestSandboxNilPluginHandling_Security(t *testing.T) {
 
 func TestMaliciousJSONSchemaValidation_Security(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping security test in short mode")
+		t.Skip("skipping security test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	validator := structured.NewValidator(true)
@@ -159,7 +159,7 @@ func TestMaliciousJSONSchemaValidation_Security(t *testing.T) {
 
 func TestInvalidVersionConstraints_Security(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping security test in short mode")
+		t.Skip("skipping security test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	invalidVersions := []string{
@@ -189,7 +189,7 @@ func TestInvalidVersionConstraints_Security(t *testing.T) {
 
 func TestValidatorRepairBrokenJSON_Security(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping security test in short mode")
+		t.Skip("skipping security test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	validator := structured.NewValidator(true)

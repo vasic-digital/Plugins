@@ -36,7 +36,7 @@ func (p *e2ePlugin) HealthCheck(_ context.Context) error { return nil }
 
 func TestFullPluginLifecyclePipeline_E2E(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip("skipping e2e test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	ctx := context.Background()
@@ -75,7 +75,7 @@ func TestFullPluginLifecyclePipeline_E2E(t *testing.T) {
 
 func TestSandboxExecutionPipeline_E2E(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip("skipping e2e test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	ctx := context.Background()
@@ -96,7 +96,7 @@ func TestSandboxExecutionPipeline_E2E(t *testing.T) {
 
 func TestStructuredOutputPipeline_E2E(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip("skipping e2e test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	// Step 1: Define schema
@@ -134,7 +134,7 @@ func TestStructuredOutputPipeline_E2E(t *testing.T) {
 
 func TestMarkdownParsingPipeline_E2E(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip("skipping e2e test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	mdParser := structured.NewMarkdownParser()
@@ -152,7 +152,7 @@ func TestMarkdownParsingPipeline_E2E(t *testing.T) {
 
 func TestConfigAccessorsPipeline_E2E(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
+		t.Skip("skipping e2e test in short mode")  // SKIP-OK: #short-mode
 	}
 
 	cfg := plugin.Config{
