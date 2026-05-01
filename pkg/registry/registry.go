@@ -303,6 +303,9 @@ func parseSemver(v string) ([3]int, error) {
 		if err != nil {
 			return [3]int{}, fmt.Errorf("invalid number %q: %w", p, err)
 		}
+		if n < 0 {
+			return [3]int{}, fmt.Errorf("version component %d must be non-negative, got %d", i, n)
+		}
 		result[i] = n
 	}
 	return result, nil

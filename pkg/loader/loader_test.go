@@ -1099,7 +1099,7 @@ func TestSharedObjectLoader_Load_Scenarios(t *testing.T) {
 		{
 			name: "empty path",
 			setupFile: func() (string, func()) {
-				return "", func() {}
+				return "", func() { /* no cleanup needed for empty path test */ }
 			},
 			setupMock:   nil,
 			expectError: true,
@@ -1108,7 +1108,7 @@ func TestSharedObjectLoader_Load_Scenarios(t *testing.T) {
 		{
 			name: "file not found",
 			setupFile: func() (string, func()) {
-				return "/nonexistent/plugin.so", func() {}
+				return "/nonexistent/plugin.so", func() { /* no cleanup needed for nonexistent file test */ }
 			},
 			setupMock:   nil,
 			expectError: true,
