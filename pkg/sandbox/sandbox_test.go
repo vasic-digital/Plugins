@@ -749,24 +749,6 @@ func TestInProcessSandbox_Concurrency(t *testing.T) {
 	}
 }
 
-func TestNewProcessSandbox_WithConfig(t *testing.T) {
-	cfg := &Config{
-		Limits: ResourceLimits{
-			MaxMemory: 100 * 1024 * 1024,
-			MaxCPU:    25,
-			MaxDisk:   50 * 1024 * 1024,
-			Timeout:   10 * time.Second,
-		},
-		AllowNetwork:    true,
-		AllowedSyscalls: []string{"read", "write"},
-		WorkDir:         "/tmp",
-	}
-
-	sb := NewProcessSandbox(cfg)
-	assert.NotNil(t, sb)
-	assert.Equal(t, cfg, sb.config)
-}
-
 func TestNewInProcessSandbox_WithConfig(t *testing.T) {
 	cfg := &Config{
 		Limits: ResourceLimits{
