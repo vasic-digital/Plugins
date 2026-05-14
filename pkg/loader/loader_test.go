@@ -507,7 +507,7 @@ func TestProcessLoader_Load_Directory(t *testing.T) {
 
 func TestProcessLoader_Load_InvalidMetadata(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	// Create a script that outputs invalid JSON
@@ -524,7 +524,7 @@ func TestProcessLoader_Load_InvalidMetadata(t *testing.T) {
 
 func TestProcessLoader_Load_Success(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -549,7 +549,7 @@ echo '{"name":"my-plugin","version":"2.0.0"}'
 
 func TestProcessLoader_Load_ExecutionFailed(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -582,7 +582,7 @@ func TestProcessLoader_LoadDir_Empty(t *testing.T) {
 
 func TestProcessLoader_LoadDir_UsesDefaultDir(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -605,7 +605,7 @@ echo '{"name":"plugin1","version":"1.0.0"}'
 
 func TestProcessLoader_LoadDir_SkipsSubdirectories(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -629,7 +629,7 @@ echo '{"name":"main-plugin","version":"1.0.0"}'
 
 func TestProcessLoader_LoadDir_ContinuesOnError(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -673,7 +673,7 @@ func TestProcessPlugin_Version(t *testing.T) {
 
 func TestProcessPlugin_Init_Success(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -697,7 +697,7 @@ exit 0
 
 func TestProcessPlugin_Init_Failure(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -720,7 +720,7 @@ exit 1
 
 func TestProcessPlugin_Start_Success(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -783,7 +783,7 @@ func TestProcessPlugin_Stop_NilProcess(t *testing.T) {
 
 func TestProcessPlugin_Stop_GracefulShutdown(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -814,7 +814,7 @@ while true; do sleep 0.1; done
 
 func TestProcessPlugin_Stop_ProcessAlreadyExited(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -849,7 +849,7 @@ exit 0
 
 func TestProcessPlugin_HealthCheck_Success(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -870,7 +870,7 @@ echo "ok"
 
 func TestProcessPlugin_HealthCheck_Unhealthy(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -893,7 +893,7 @@ echo "degraded"
 
 func TestProcessPlugin_HealthCheck_CommandFailed(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -1004,7 +1004,7 @@ func TestMockPluginHandle_Lookup_NotFound(t *testing.T) {
 func TestSharedObjectLoader_LoadDir_ReadDirError(t *testing.T) {
 	// Create a directory with no read permissions
 	if runtime.GOOS == "windows" {
-		t.Skip("Permission tests not reliable on Windows")
+		t.Skip("Permission tests not reliable on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -1020,7 +1020,7 @@ func TestSharedObjectLoader_LoadDir_ReadDirError(t *testing.T) {
 
 func TestProcessLoader_ConcurrentLoad(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -1345,7 +1345,7 @@ func TestSharedObjectLoader_ValidatePath_RelativePath(t *testing.T) {
 
 func TestProcessPlugin_Stop_SignalFails_KillSucceeds(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -1382,7 +1382,7 @@ sleep 10
 
 func TestProcessLoader_Load_ConcurrentSafety(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -1419,7 +1419,7 @@ echo '{"name":"concurrent","version":"1.0.0"}'
 
 func TestProcessPlugin_Stop_SignalSucceeds(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -1459,7 +1459,7 @@ func TestSharedObjectLoader_ValidatePath_InvalidAbsPath(t *testing.T) {
 
 func TestProcessLoader_LoadDir_WithMultiplePlugins(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -1506,7 +1506,7 @@ echo '{"name":"plugin%d","version":"1.0.%d"}'
 
 func TestProcessPlugin_Stop_KillAfterSignalFails(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -1583,7 +1583,7 @@ func TestSharedObjectLoader_ValidatePath_FilepathAbsError(t *testing.T) {
 // Signal fails and Kill is called (line 313-314).
 func TestProcessPlugin_Stop_SignalError_KillSuccess(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
@@ -1617,7 +1617,7 @@ sleep 30
 // both Signal and Kill might fail (extremely rare).
 func TestProcessPlugin_Stop_BothSignalAndKillFail(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows")
+		t.Skip("Skipping on Windows") // SKIP-OK: #non-windows-only
 	}
 
 	dir := t.TempDir()
