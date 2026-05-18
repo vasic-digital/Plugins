@@ -132,7 +132,9 @@ func TestProcessSandbox_Execute_UnknownAction(t *testing.T) {
 
 	result, err := sb.Execute(context.Background(), p, Action{Name: "unknown"})
 	require.NoError(t, err)
-	assert.Contains(t, result.Error, "unknown action")
+	// Post-i18n surface (CONST-046, round-125): NoopTranslator returns
+	// the key verbatim; substring assertion pins the key shape.
+	assert.Contains(t, result.Error, "plugins_sandbox_unknown_action")
 }
 
 func TestProcessSandbox_Execute_NilPlugin(t *testing.T) {
@@ -208,7 +210,9 @@ func TestInProcessSandbox_Execute_UnknownAction(t *testing.T) {
 
 	result, err := sb.Execute(context.Background(), p, Action{Name: "bad"})
 	require.NoError(t, err)
-	assert.Contains(t, result.Error, "unknown action")
+	// Post-i18n surface (CONST-046, round-125): NoopTranslator returns
+	// the key verbatim; substring assertion pins the key shape.
+	assert.Contains(t, result.Error, "plugins_sandbox_unknown_action")
 }
 
 func TestInProcessSandbox_Execute_AllActions(t *testing.T) {
@@ -606,7 +610,9 @@ func TestProcessSandbox_Execute_TimeoutPath(t *testing.T) {
 
 	result, err := sb.Execute(context.Background(), p, Action{Name: "health"})
 	require.NoError(t, err)
-	assert.Contains(t, result.Error, "timed out")
+	// Post-i18n surface (CONST-046, round-125): NoopTranslator returns
+	// the key verbatim; substring assertion pins the key shape.
+	assert.Contains(t, result.Error, "plugins_sandbox_execution_timed_out")
 }
 
 func TestConfigFromPayload_ComplexMap(t *testing.T) {

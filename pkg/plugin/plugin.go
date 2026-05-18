@@ -7,7 +7,31 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	"digital.vasic.plugins/pkg/i18n"
 )
+
+// translator is the package-level message-resolution seam (CONST-046,
+// round-125). Defaults to NoopTranslator so production behaviour is
+// unchanged for any caller that has not wired a project-side
+// translator; consumers swap it via SetTranslator at startup.
+//
+// Per CONST-051(B) the seam is project-not-aware: this package never
+// imports a HelixCode-specific catalogue; the consuming project is
+// responsible for providing the real Translator implementation.
+var translator i18n.Translator = i18n.NoopTranslator{}
+
+// SetTranslator wires a project-side Translator. Callers MUST invoke
+// it at startup before issuing user-facing error returns; calling it
+// concurrently with plugin construction is not supported. Passing
+// nil falls back to NoopTranslator so production cannot crash from a
+// missing wiring.
+func SetTranslator(t i18n.Translator) {
+	if t == nil {
+		t = i18n.NoopTranslator{}
+	}
+	translator = t
+}
 
 // State represents the current state of a plugin.
 type State int
@@ -71,10 +95,10 @@ type Metadata struct {
 // Validate checks that required metadata fields are present.
 func (m *Metadata) Validate() error {
 	if m.Name == "" {
-		return fmt.Errorf("metadata name is required")
+		return fmt.Errorf("%s", translator.T("plugins_metadata_name_required", nil))
 	}
 	if m.Version == "" {
-		return fmt.Errorf("metadata version is required")
+		return fmt.Errorf("%s", translator.T("plugins_metadata_version_required", nil))
 	}
 	return nil
 }

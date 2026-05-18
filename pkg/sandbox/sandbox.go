@@ -14,8 +14,30 @@ import (
 
 	"github.com/google/uuid"
 
+	"digital.vasic.plugins/pkg/i18n"
 	"digital.vasic.plugins/pkg/plugin"
 )
+
+// translator is the package-level message-resolution seam (CONST-046,
+// round-125). Defaults to NoopTranslator so production behaviour is
+// unchanged for any caller that has not wired a project-side
+// translator; consumers swap it via SetTranslator at startup.
+//
+// Per CONST-051(B) the seam is project-not-aware: this package never
+// imports a HelixCode-specific catalogue; the consuming project is
+// responsible for providing the real Translator implementation.
+var translator i18n.Translator = i18n.NoopTranslator{}
+
+// SetTranslator wires a project-side Translator. Callers MUST invoke
+// it at startup before issuing user-facing error returns. Passing nil
+// falls back to NoopTranslator so production cannot crash from a
+// missing wiring.
+func SetTranslator(t i18n.Translator) {
+	if t == nil {
+		t = i18n.NoopTranslator{}
+	}
+	translator = t
+}
 
 // ResourceLimits defines resource constraints for sandboxed execution.
 type ResourceLimits struct {
@@ -115,7 +137,7 @@ func (s *ProcessSandbox) Execute(
 	defer s.mu.Unlock()
 
 	if p == nil {
-		return nil, fmt.Errorf("plugin cannot be nil")
+		return nil, fmt.Errorf("%s", translator.T("plugins_sandbox_plugin_nil", nil))
 	}
 
 	id := uuid.New().String()
@@ -157,7 +179,7 @@ func (s *ProcessSandbox) Execute(
 		case "stop":
 			errCh <- p.Stop(execCtx)
 		default:
-			errCh <- fmt.Errorf("unknown action: %s", action.Name)
+			errCh <- fmt.Errorf("%s: %s", translator.T("plugins_sandbox_unknown_action", nil), action.Name)
 		}
 	}()
 
@@ -169,7 +191,7 @@ func (s *ProcessSandbox) Execute(
 		}
 	case <-execCtx.Done():
 		result.Duration = time.Since(start)
-		result.Error = "execution timed out"
+		result.Error = translator.T("plugins_sandbox_execution_timed_out", nil)
 	}
 
 	return result, nil
@@ -210,7 +232,7 @@ func (s *InProcessSandbox) Execute(
 	ctx context.Context, p plugin.Plugin, action Action,
 ) (*Result, error) {
 	if p == nil {
-		return nil, fmt.Errorf("plugin cannot be nil")
+		return nil, fmt.Errorf("%s", translator.T("plugins_sandbox_plugin_nil", nil))
 	}
 
 	id := uuid.New().String()
@@ -236,7 +258,7 @@ func (s *InProcessSandbox) Execute(
 	case "stop":
 		actionErr = p.Stop(execCtx)
 	default:
-		actionErr = fmt.Errorf("unknown action: %s", action.Name)
+		actionErr = fmt.Errorf("%s: %s", translator.T("plugins_sandbox_unknown_action", nil), action.Name)
 	}
 
 	result.Duration = time.Since(start)
