@@ -1,0 +1,9 @@
+# 5-locale bilingual fixture — de (German)
+# Round-293 Plugins Challenge bundle.
+locale: de
+labels:
+  plugins_state_uninitialized: "Plugin nicht initialisiert"
+  plugins_state_initialized: "Plugin initialisiert"
+  plugins_state_running: "Plugin läuft"
+  plugins_state_stopped: "Plugin gestoppt"
+  plugins_state_failed: "Plugin fehlgeschlagen"

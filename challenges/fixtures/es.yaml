@@ -1,0 +1,9 @@
+# 5-locale bilingual fixture — es (Spanish)
+# Round-293 Plugins Challenge bundle.
+locale: es
+labels:
+  plugins_state_uninitialized: "Complemento no inicializado"
+  plugins_state_initialized: "Complemento inicializado"
+  plugins_state_running: "Complemento en ejecución"
+  plugins_state_stopped: "Complemento detenido"
+  plugins_state_failed: "Complemento fallido"

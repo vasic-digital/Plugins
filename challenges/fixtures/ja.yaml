@@ -1,0 +1,9 @@
+# 5-locale bilingual fixture — ja (Japanese)
+# Round-293 Plugins Challenge bundle.
+locale: ja
+labels:
+  plugins_state_uninitialized: "プラグインは未初期化"
+  plugins_state_initialized: "プラグインを初期化しました"
+  plugins_state_running: "プラグイン実行中"
+  plugins_state_stopped: "プラグインを停止しました"
+  plugins_state_failed: "プラグイン失敗"

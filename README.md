@@ -243,6 +243,74 @@ The Plugins module powers HelixAgent's extensible plugin system:
 
 The internal adapter at `internal/adapters/plugins/` bridges these generic types to HelixAgent-specific interfaces.
 
+## Round-293 deep-doc + Challenge enrichment (anti-bluff)
+
+This submodule ships a deep-documentation pack and a paired-mutation
+Challenge gate per the round-293 sweep (template mirror of rounds 220
+/ 242-289). The goal is to give every exported symbol either a unit
+test that exercises the real implementation OR a runtime Challenge
+that captures positive evidence — never an "absence-of-error PASS".
+
+- **Test coverage ledger:** [`docs/test-coverage.md`](docs/test-coverage.md)
+  — symbol→test→Challenge mapping for `pkg/plugin`, `pkg/registry`,
+  `pkg/loader`, `pkg/structured`, `pkg/sandbox`, `pkg/i18n`.
+- **Real exerciser:** [`challenges/runner/main.go`](challenges/runner/main.go)
+  — constructs a real `Registry`, registers two real `Plugin`
+  implementations with a declared dependency (`api` depends on `db`),
+  drives the full lifecycle (`Init → Start → HealthCheck → Stop`),
+  exercises the real `InProcessSandbox` over the running plugin, parses
+  real JSON + YAML + Markdown payloads through the `structured.Parser`
+  trio, and renders 5-locale labels via fixtures under
+  `challenges/fixtures/<locale>.yaml`.
+- **Paired-mutation gate:** [`challenges/plugins_describe_challenge.sh`](challenges/plugins_describe_challenge.sh)
+  — normal run asserts the 5-locale ledger, lifecycle markers,
+  sandbox evidence, parser output line, and terminal PASS. With
+  `PLUGINS_DESCRIBE_MUTATE=1`, plants a token the runner CANNOT emit
+  and asserts exit 99 — proving the gate has positive detection
+  capability (not a tautology).
+
+```bash
+# Run the real Plugins exerciser.
+go run ./challenges/runner -fixtures ./challenges/fixtures
+
+# Paired-mutation gate (normal run — exit 0).
+bash ./challenges/plugins_describe_challenge.sh
+
+# Paired-mutation gate (mutation leg — exit 99 expected).
+PLUGINS_DESCRIBE_MUTATE=1 bash ./challenges/plugins_describe_challenge.sh
+```
+
+### Anti-bluff guarantees
+
+- **No mock from production code.** `pkg/*` files not ending `_test.go`
+  do NOT import `mocks/` packages. The runner uses real package code
+  paths only — real `Registry`, real `Plugin`, real `InProcessSandbox`,
+  real `JSONParser` / `YAMLParser` / `MarkdownParser`. Per CONST-050(A).
+- **No hardcoded user-facing strings.** Every user-facing error
+  message in `pkg/plugin` and `pkg/sandbox` routes through
+  `translator.T(key, params)`; the production default is
+  `i18n.NoopTranslator` (returns the key verbatim), and consuming
+  projects wire their own catalogue. Per CONST-046.
+- **Captured runtime evidence.** Every PASS line in the runner stdout
+  carries observable evidence — state transitions (`db=running
+  api=running`), sandbox duration (`duration=3.2µs`), parser outputs
+  (`json={"plugin":"api",...}`), and the 5-locale label render. Per
+  CONST-035 / Article XI §11.9.
+- **Submodule-decoupled.** This module is project-not-aware
+  (CONST-051(B)); the runner intentionally avoids any HelixCode-specific
+  import and could be lifted into a different consuming project
+  unchanged.
+
+### Verbatim 2026-05-19 operator mandate (CONST-049 §11.4.17 archival)
+
+> "all existing tests and Challenges do work in anti-bluff manner -
+> they MUST confirm that all tested codebase really works as expected!
+> We had been in position that all tests do execute with success and
+> all Challenges as well, but in reality the most of the features does
+> not work and can't be used! This MUST NOT be the case and execution
+> of tests and Challenges MUST guarantee the quality, the completition
+> and full usability by end users of the product!"
+
 ## License
 
 Proprietary.

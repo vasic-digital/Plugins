@@ -1,0 +1,9 @@
+# 5-locale bilingual fixture — sr (Srpski / Serbian)
+# Round-293 Plugins Challenge bundle.
+locale: sr
+labels:
+  plugins_state_uninitialized: "Dodatak nije inicijalizovan"
+  plugins_state_initialized: "Dodatak inicijalizovan"
+  plugins_state_running: "Dodatak radi"
+  plugins_state_stopped: "Dodatak zaustavljen"
+  plugins_state_failed: "Dodatak neuspeo"

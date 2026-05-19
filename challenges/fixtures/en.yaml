@@ -1,0 +1,11 @@
+# 5-locale bilingual fixture — en (English)
+# Round-293 Plugins Challenge bundle. Keys MUST match the runner's
+# expected set: plugins_state_uninitialized, plugins_state_initialized,
+# plugins_state_running, plugins_state_stopped, plugins_state_failed.
+locale: en
+labels:
+  plugins_state_uninitialized: "Plugin not initialized"
+  plugins_state_initialized: "Plugin initialized"
+  plugins_state_running: "Plugin running"
+  plugins_state_stopped: "Plugin stopped"
+  plugins_state_failed: "Plugin failed"
