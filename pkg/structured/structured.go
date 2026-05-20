@@ -8,8 +8,11 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
+
+	"digital.vasic.plugins/pkg/i18n"
 )
 
 // OutputFormat represents a supported output format.
@@ -227,11 +230,71 @@ type jsonMarshalIndenter func(v any, prefix, indent string) ([]byte, error)
 type Validator struct {
 	strictMode    bool
 	marshalIndent jsonMarshalIndenter
+
+	// translator resolves user-facing schema-validation message keys
+	// (CONST-046 / round 386 §11.4). Defaults to NoopTranslator
+	// (key-verbatim passthrough) so legacy assertions against the
+	// English validation text keep passing until a consuming project
+	// wires a real translator via SetTranslator. Per CONST-051(B) this
+	// is decoupled injection, not a parent-tree reach. Guarded by trMu
+	// so concurrent SetTranslator / Validate calls are race-free.
+	trMu       sync.RWMutex
+	translator i18n.Translator
 }
 
 // NewValidator creates a new schema validator.
 func NewValidator(strictMode bool) *Validator {
-	return &Validator{strictMode: strictMode, marshalIndent: json.MarshalIndent}
+	return &Validator{
+		strictMode:    strictMode,
+		marshalIndent: json.MarshalIndent,
+		translator:    i18n.NoopTranslator{},
+	}
+}
+
+// SetTranslator wires the i18n translator used to render user-facing
+// schema-validation error messages (CONST-046 / round 386 §11.4).
+// Passing a nil translator is a no-op (the validator continues to use
+// the NoopTranslator key-verbatim default installed at construction).
+// Safe to call concurrently with Validate / ValidateJSON.
+//
+// Per CONST-051(B), this is configuration injection — the Plugins
+// submodule never reaches into a parent project to discover its
+// catalogue; the consuming project hands it in.
+func (v *Validator) SetTranslator(t i18n.Translator) {
+	if t == nil {
+		return
+	}
+	v.trMu.Lock()
+	defer v.trMu.Unlock()
+	v.translator = t
+}
+
+// activeTranslator returns the active translator, defaulting to
+// NoopTranslator when none is wired (e.g. a Validator constructed via
+// a struct literal rather than NewValidator).
+func (v *Validator) activeTranslator() i18n.Translator {
+	v.trMu.RLock()
+	defer v.trMu.RUnlock()
+	if v.translator == nil {
+		return i18n.NoopTranslator{}
+	}
+	return v.translator
+}
+
+// tr resolves a user-facing validation message body through the
+// injected i18n.Translator. NoopTranslator returns the key verbatim;
+// when that happens we substitute the legacy English fallback so
+// long-standing string assertions against ValidationError.Message keep
+// passing. A real translator wired by the consuming project supplies
+// the localised rendering and short-circuits the fallback. Per
+// CONST-046, no human-readable static literal is exposed to end users
+// without going through this seam.
+func (v *Validator) tr(key string, params map[string]any, englishFallback string) string {
+	rendered := v.activeTranslator().T(key, params)
+	if rendered == key {
+		return englishFallback
+	}
+	return rendered
 }
 
 // Validate validates a raw string against a schema by first parsing it
@@ -252,9 +315,11 @@ func (v *Validator) ValidateJSON(
 	if err := json.Unmarshal([]byte(output), &data); err != nil {
 		result.Valid = false
 		result.Errors = append(result.Errors, ValidationError{
-			Path:    "$",
-			Message: fmt.Sprintf("invalid JSON: %v", err),
-			Value:   truncate(output, 100),
+			Path: "$",
+			Message: v.tr("plugins_validation_invalid_json",
+				map[string]any{"cause": err.Error()},
+				fmt.Sprintf("invalid JSON: %v", err)),
+			Value: truncate(output, 100),
 		})
 		return result, nil
 	}
@@ -282,27 +347,35 @@ func (v *Validator) validateValue(
 		str, ok := value.(string)
 		if !ok {
 			return append(errs, ValidationError{
-				Path: path, Message: "expected string",
+				Path: path,
+				Message: v.tr("plugins_validation_expected_string", nil,
+					"expected string"),
 				Value: fmt.Sprintf("%T", value),
 			})
 		}
 		if schema.MinLength != nil && len(str) < *schema.MinLength {
 			errs = append(errs, ValidationError{
-				Path:    path,
-				Message: fmt.Sprintf("string too short (min: %d)", *schema.MinLength),
+				Path: path,
+				Message: v.tr("plugins_validation_string_too_short",
+					map[string]any{"min": *schema.MinLength},
+					fmt.Sprintf("string too short (min: %d)", *schema.MinLength)),
 			})
 		}
 		if schema.MaxLength != nil && len(str) > *schema.MaxLength {
 			errs = append(errs, ValidationError{
-				Path:    path,
-				Message: fmt.Sprintf("string too long (max: %d)", *schema.MaxLength),
+				Path: path,
+				Message: v.tr("plugins_validation_string_too_long",
+					map[string]any{"max": *schema.MaxLength},
+					fmt.Sprintf("string too long (max: %d)", *schema.MaxLength)),
 			})
 		}
 		if schema.Pattern != "" {
 			if matched, _ := regexp.MatchString(schema.Pattern, str); !matched {
 				errs = append(errs, ValidationError{
-					Path:    path,
-					Message: fmt.Sprintf("does not match pattern: %s", schema.Pattern),
+					Path: path,
+					Message: v.tr("plugins_validation_pattern_mismatch",
+						map[string]any{"pattern": schema.Pattern},
+						fmt.Sprintf("does not match pattern: %s", schema.Pattern)),
 				})
 			}
 		}
@@ -316,8 +389,10 @@ func (v *Validator) validateValue(
 			}
 			if !found {
 				errs = append(errs, ValidationError{
-					Path:    path,
-					Message: fmt.Sprintf("value not in enum: %v", schema.Enum),
+					Path: path,
+					Message: v.tr("plugins_validation_value_not_in_enum",
+						map[string]any{"enum": schema.Enum},
+						fmt.Sprintf("value not in enum: %v", schema.Enum)),
 				})
 			}
 		}
@@ -326,32 +401,42 @@ func (v *Validator) validateValue(
 		num, ok := value.(float64)
 		if !ok {
 			return append(errs, ValidationError{
-				Path: path, Message: "expected integer",
+				Path: path,
+				Message: v.tr("plugins_validation_expected_integer", nil,
+					"expected integer"),
 				Value: fmt.Sprintf("%T", value),
 			})
 		}
 		if num != float64(int64(num)) {
 			errs = append(errs, ValidationError{
-				Path: path, Message: "expected integer, got float",
+				Path: path,
+				Message: v.tr("plugins_validation_expected_integer_got_float", nil,
+					"expected integer, got float"),
 			})
 		}
 		if schema.Minimum != nil && num < *schema.Minimum {
 			errs = append(errs, ValidationError{
-				Path:    path,
-				Message: fmt.Sprintf("below minimum (%v)", *schema.Minimum),
+				Path: path,
+				Message: v.tr("plugins_validation_below_minimum",
+					map[string]any{"minimum": *schema.Minimum},
+					fmt.Sprintf("below minimum (%v)", *schema.Minimum)),
 			})
 		}
 		if schema.Maximum != nil && num > *schema.Maximum {
 			errs = append(errs, ValidationError{
-				Path:    path,
-				Message: fmt.Sprintf("above maximum (%v)", *schema.Maximum),
+				Path: path,
+				Message: v.tr("plugins_validation_above_maximum",
+					map[string]any{"maximum": *schema.Maximum},
+					fmt.Sprintf("above maximum (%v)", *schema.Maximum)),
 			})
 		}
 
 	case "number":
 		if _, ok := value.(float64); !ok {
 			errs = append(errs, ValidationError{
-				Path: path, Message: "expected number",
+				Path: path,
+				Message: v.tr("plugins_validation_expected_number", nil,
+					"expected number"),
 				Value: fmt.Sprintf("%T", value),
 			})
 		}
@@ -359,7 +444,9 @@ func (v *Validator) validateValue(
 	case "boolean":
 		if _, ok := value.(bool); !ok {
 			errs = append(errs, ValidationError{
-				Path: path, Message: "expected boolean",
+				Path: path,
+				Message: v.tr("plugins_validation_expected_boolean", nil,
+					"expected boolean"),
 				Value: fmt.Sprintf("%T", value),
 			})
 		}
@@ -368,20 +455,26 @@ func (v *Validator) validateValue(
 		arr, ok := value.([]any)
 		if !ok {
 			return append(errs, ValidationError{
-				Path: path, Message: "expected array",
+				Path: path,
+				Message: v.tr("plugins_validation_expected_array", nil,
+					"expected array"),
 				Value: fmt.Sprintf("%T", value),
 			})
 		}
 		if schema.MinItems != nil && len(arr) < *schema.MinItems {
 			errs = append(errs, ValidationError{
-				Path:    path,
-				Message: fmt.Sprintf("array too short (min: %d)", *schema.MinItems),
+				Path: path,
+				Message: v.tr("plugins_validation_array_too_short",
+					map[string]any{"min": *schema.MinItems},
+					fmt.Sprintf("array too short (min: %d)", *schema.MinItems)),
 			})
 		}
 		if schema.MaxItems != nil && len(arr) > *schema.MaxItems {
 			errs = append(errs, ValidationError{
-				Path:    path,
-				Message: fmt.Sprintf("array too long (max: %d)", *schema.MaxItems),
+				Path: path,
+				Message: v.tr("plugins_validation_array_too_long",
+					map[string]any{"max": *schema.MaxItems},
+					fmt.Sprintf("array too long (max: %d)", *schema.MaxItems)),
 			})
 		}
 		if schema.Items != nil {
@@ -395,15 +488,18 @@ func (v *Validator) validateValue(
 		obj, ok := value.(map[string]any)
 		if !ok {
 			return append(errs, ValidationError{
-				Path: path, Message: "expected object",
+				Path: path,
+				Message: v.tr("plugins_validation_expected_object", nil,
+					"expected object"),
 				Value: fmt.Sprintf("%T", value),
 			})
 		}
 		for _, req := range schema.Required {
 			if _, exists := obj[req]; !exists {
 				errs = append(errs, ValidationError{
-					Path:    path + "." + req,
-					Message: "required property missing",
+					Path: path + "." + req,
+					Message: v.tr("plugins_validation_required_property_missing", nil,
+						"required property missing"),
 				})
 			}
 		}

@@ -8,3 +8,27 @@ plugins_metadata_version_required: "metadata version is required"
 plugins_sandbox_plugin_nil: "plugin cannot be nil"
 plugins_sandbox_unknown_action: "unknown action"
 plugins_sandbox_execution_timed_out: "execution timed out"
+
+# Round-386 §11.4 — structured-output schema-validation messages (17
+# keys). Each key carries the params it formats so a locale override
+# can re-order or omit them. The English text below MUST stay aligned
+# with the legacy ValidationError.Message literal so existing fallback
+# assertions keep passing under NoopTranslator (CONST-046 + Article XI
+# §11.9 anti-bluff posture).
+plugins_validation_invalid_json: "invalid JSON: {{cause}}"
+plugins_validation_expected_string: "expected string"
+plugins_validation_string_too_short: "string too short (min: {{min}})"
+plugins_validation_string_too_long: "string too long (max: {{max}})"
+plugins_validation_pattern_mismatch: "does not match pattern: {{pattern}}"
+plugins_validation_value_not_in_enum: "value not in enum: {{enum}}"
+plugins_validation_expected_integer: "expected integer"
+plugins_validation_expected_integer_got_float: "expected integer, got float"
+plugins_validation_below_minimum: "below minimum ({{minimum}})"
+plugins_validation_above_maximum: "above maximum ({{maximum}})"
+plugins_validation_expected_number: "expected number"
+plugins_validation_expected_boolean: "expected boolean"
+plugins_validation_expected_array: "expected array"
+plugins_validation_array_too_short: "array too short (min: {{min}})"
+plugins_validation_array_too_long: "array too long (max: {{max}})"
+plugins_validation_expected_object: "expected object"
+plugins_validation_required_property_missing: "required property missing"
